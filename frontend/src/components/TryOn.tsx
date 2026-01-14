@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { measurementApi, MeasurementResponse } from '../services/api';
-import { Camera, Upload, Ruler, RefreshCw, AlertCircle, Sparkles, ChevronRight } from 'lucide-react';
+import { Upload, Ruler, RefreshCw, AlertCircle, Sparkles, ChevronRight } from 'lucide-react';
 import { SizeRecommendations } from './SizeRecommendations';
 
-export const TryOn: React.FC = () => {
+interface TryOnProps {
+  onGenerateAvatar: (image: string) => void;
+}
+
+export const TryOn: React.FC<TryOnProps> = ({ onGenerateAvatar }) => {
   const [frontImage, setFrontImage] = useState<string | null>(null);
   const [sideImage, setSideImage] = useState<string | null>(null);
   const [height, setHeight] = useState<string>('170');
@@ -76,7 +80,7 @@ export const TryOn: React.FC = () => {
               <img src={frontImage} className="w-full h-full object-cover" alt="Front Preview" />
             ) : (
               <div className="text-center p-6">
-                <Camera className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
                 <p className="text-sm text-gray-500">Click to upload front view</p>
               </div>
             )}
@@ -187,7 +191,11 @@ export const TryOn: React.FC = () => {
               </button>
             </div>
           ) : (
-            <SizeRecommendations measurements={results.measurements as any} gender={gender} />
+            <SizeRecommendations 
+              measurements={results.measurements as any} 
+              gender={gender} 
+              onGenerateAvatar={() => onGenerateAvatar(frontImage || '')}
+            />
           )}
         </div>
       )}

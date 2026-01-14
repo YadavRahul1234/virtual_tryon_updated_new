@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { recommendationsApi, SizeRecommendationResponse, GarmentCategoryInfo } from '../services/api';
-import { Shirt, Tag, ChevronRight, Activity, Info, Loader2, Sparkles } from 'lucide-react';
+import { Shirt, Tag, ChevronRight, Activity, Info, Loader2, Sparkles, User } from 'lucide-react';
 
 interface SizeRecommendationsProps {
   gender: 'male' | 'female';
@@ -13,9 +13,10 @@ interface SizeRecommendationsProps {
     inseam: number;
     units: string;
   };
+  onGenerateAvatar: () => void;
 }
 
-export const SizeRecommendations: React.FC<SizeRecommendationsProps> = ({ measurements, gender }) => {
+export const SizeRecommendations: React.FC<SizeRecommendationsProps> = ({ measurements, gender, onGenerateAvatar }) => {
   const [categories, setCategories] = useState<GarmentCategoryInfo[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [recommendation, setRecommendation] = useState<SizeRecommendationResponse | null>(null);
@@ -169,6 +170,19 @@ export const SizeRecommendations: React.FC<SizeRecommendationsProps> = ({ measur
                     If you prefer a closer fit, consider sizing down to <b>S</b>.
                   </p>
                </div>
+                <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                  <div>
+                    <h6 className="font-bold text-gray-900 dark:text-white">Ready for Virtual Try-On?</h6>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Generate a 2D avatar to see how clothes look on you.</p>
+                  </div>
+                  <button 
+                    onClick={onGenerateAvatar}
+                    className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold flex items-center gap-2 transition-all hover:scale-105"
+                  >
+                    <User className="w-5 h-5" />
+                    Generate 2D Avatar
+                  </button>
+                </div>
             </div>
           </div>
         </div>

@@ -58,7 +58,7 @@ export function Features() {
           {features.map((feature, index) => (
             <div
               key={index}
-              className={`group p-8 bg-gray-50 dark:bg-gray-800 rounded-2xl hover:bg-gradient-to-br hover:from-blue-50 hover:to-cyan-50 dark:hover:from-gray-800 dark:hover:to-gray-700 transition-all duration-300 hover:shadow-xl border border-transparent hover:border-blue-200 dark:hover:border-blue-800 animate-slide-up stagger-${index + 1}`}
+              className={`group p-8 bg-gray-50 dark:bg-gray-800 rounded-2xl transition-all duration-300 hover:shadow-xl border border-transparent animate-slide-up stagger-${index + 1}`}
             >
               <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${
                 feature.color === 'blue'
@@ -73,7 +73,6 @@ export function Features() {
               <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
                 {feature.description}
               </p>
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-500/0 via-blue-500/0 to-cyan-500/0 group-hover:from-blue-500/5 group-hover:via-cyan-500/10 group-hover:to-blue-500/5 transition-all duration-300 pointer-events-none"></div>
             </div>
           ))}
         </div>

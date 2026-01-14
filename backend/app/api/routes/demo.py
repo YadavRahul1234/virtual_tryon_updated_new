@@ -20,7 +20,7 @@ async def create_demo_request(request: DemoRequest):
         logger.info(f"Received demo request from {request.email}")
         
         # Get the form_data collection
-        collection = mongodb.get_collection("form_data")
+        collection = mongodb.get_collection("form data")
         
         # Prepare data with timestamp
         demo_data = request.dict()

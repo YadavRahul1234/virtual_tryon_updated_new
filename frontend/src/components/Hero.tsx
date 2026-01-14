@@ -1,4 +1,4 @@
-import { ArrowRight, Sparkles, User } from 'lucide-react';
+import { ArrowRight, User } from 'lucide-react';
 
 interface HeroProps {
   onStartTryOn: () => void;
@@ -21,10 +21,6 @@ export function Hero({ onStartTryOn }: HeroProps) {
       <div className="max-w-7xl mx-auto relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-8 animate-slide-up">
-            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 rounded-full animate-fade-in">
-              <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-pulse" />
-              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">AI-Powered Perfect Fit</span>
-            </div>
 
             <h1 className="text-5xl lg:text-6xl font-bold leading-tight text-gray-900 dark:text-white">
               Find Your<br />
