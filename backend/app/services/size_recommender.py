@@ -25,26 +25,71 @@ class SizeRecommender:
     
     def __init__(self):
         self.db = SizeChartDatabase()
-        
-        # Measurement weights for scoring (total = 100)
-        self.weights = {
-            'chest': 35,
-            'waist': 30,
-            'hip': 25,
-            'shoulder_width': 5,
-            'inseam': 5,
-            'height': 5
-        }
-        
-        # Tolerance in cm (±this amount is acceptable)
-        self.tolerance = {
-            'chest': 3,
-            'waist': 3,
-            'hip': 3,
-            'shoulder_width': 2,
-            'inseam': 5,
-            'height': 10
-        }
+    
+    def _get_weights_for_category(self, category: GarmentCategory) -> Dict[str, float]:
+        """Get measurement weights based on garment category."""
+        if category in [GarmentCategory.MENS_SHIRT, GarmentCategory.WOMENS_TOP]:
+            # For shirts/tops: chest and shoulders are most critical
+            return {
+                'chest': 50,          # Most important - must fit across torso
+                'shoulder_width': 30, # Critical - seams must sit correctly
+                'waist': 15,          # Less important - casual shirts aren't fitted
+                'height': 5
+            }
+        elif category in [GarmentCategory.MENS_PANTS, GarmentCategory.WOMENS_PANTS]:
+            # For pants: waist, hip, and inseam are most critical
+            return {
+                'waist': 45,
+                'hip': 35,
+                'inseam': 15,
+                'height': 5
+            }
+        elif category == GarmentCategory.DRESS:
+            # For dresses: balanced importance
+            return {
+                'chest': 30,
+                'waist': 25,
+                'hip': 30,
+                'height': 15
+            }
+        else:
+            # Default weights
+            return {
+                'chest': 35,
+                'waist': 30,
+                'hip': 25,
+                'shoulder_width': 5,
+                'inseam': 5,
+                'height': 5
+            }
+    
+    def _get_tolerance_for_category(self, category: GarmentCategory) -> Dict[str, float]:
+        """Get measurement tolerances based on garment category."""
+        if category in [GarmentCategory.MENS_SHIRT, GarmentCategory.WOMENS_TOP]:
+            # Shirts need breathing room in chest, less critical waist
+            return {
+                'chest': 4,           # Allow more room for comfort
+                'waist': 5,           # Not critical for casual shirts
+                'shoulder_width': 2,  # Keep tight - critical for fit
+                'height': 10
+            }
+        elif category in [GarmentCategory.MENS_PANTS, GarmentCategory.WOMENS_PANTS]:
+            return {
+                'waist': 3,
+                'hip': 3,
+                'inseam': 5,
+                'height': 10
+            }
+        else:
+            # Default tolerances
+            return {
+                'chest': 3,
+                'waist': 3,
+                'hip': 3,
+                'shoulder_width': 2,
+                'inseam': 5,
+                'height': 10
+            }
     
     def recommend_sizes(
         self,
@@ -73,7 +118,8 @@ class SizeRecommender:
         for size_name, size_spec in size_chart.sizes.items():
             fit_score, fit_analysis = self._calculate_fit_score(
                 user_measurements,
-                size_spec
+                size_spec,
+                category
             )
             
             recommendations.append(SizeRecommendation(
@@ -91,7 +137,8 @@ class SizeRecommender:
     def _calculate_fit_score(
         self,
         user_measurements: Dict[str, float],
-        size_spec: SizeSpecification
+        size_spec: SizeSpecification,
+        category: GarmentCategory
     ) -> Tuple[float, Dict[str, str]]:
         """
         Calculate fit score for a specific size.
@@ -104,6 +151,10 @@ class SizeRecommender:
         total_score = 0
         total_weight = 0
         fit_analysis = {}
+        
+        # Get category-specific weights and tolerances
+        weights = self._get_weights_for_category(category)
+        tolerances = self._get_tolerance_for_category(category)
         
         # Compare each measurement
         for measurement_name, user_value in user_measurements.items():
@@ -132,16 +183,16 @@ class SizeRecommender:
                     # Calculate how far outside range
                     if user_value < min_height:
                         diff = min_height - user_value
-                        score = max(0, 100 - (diff / self.tolerance['height']) * 50)
+                        score = max(0, 100 - (diff / tolerances.get('height', 10)) * 50)
                         fit_analysis['height'] = f"{diff:.0f}cm shorter than recommended"
                     else:
                         diff = user_value - max_height
-                        score = max(0, 100 - (diff / self.tolerance['height']) * 50)
+                        score = max(0, 100 - (diff / tolerances.get('height', 10)) * 50)
                         fit_analysis['height'] = f"{diff:.0f}cm taller than recommended"
             else:
                 # Regular measurement comparison
                 diff = abs(user_value - garment_value)
-                tolerance = self.tolerance.get(measurement_name, 3)
+                tolerance = tolerances.get(measurement_name, 3)
                 
                 if diff <= tolerance:
                     # Within tolerance - score decreases as diff increases
@@ -172,7 +223,7 @@ class SizeRecommender:
                         fit_analysis[measurement_name] = f"May be {diff:.0f}cm loose"
             
             # Apply weight
-            weight = self.weights.get(measurement_name, 0)
+            weight = weights.get(measurement_name, 0)
             total_score += score * weight
             total_weight += weight
         

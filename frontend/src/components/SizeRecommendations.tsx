@@ -77,7 +77,7 @@ export const SizeRecommendations: React.FC<SizeRecommendationsProps> = ({ measur
         <div>
           <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Sparkles className="w-6 h-6 text-violet-500" />
-            AI Size Recommendation
+            Size Recommendation
           </h3>
           <p className="text-gray-500 dark:text-gray-400">Based on your unique body profile</p>
         </div>
