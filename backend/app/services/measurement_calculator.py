@@ -12,7 +12,7 @@ class MeasurementCalculator:
     # References: NHANES data, Pheasant's 'Bodyspace'
     ANTHROPOMETRIC_RATIOS = {
         'male': {
-            'shoulder_width': 0.23,
+            'shoulder_width': 0.29, # Increased to 0.29 (approx 52-54cm for 180cm height) for XL/XXL support
             'chest': 0.55,
             'waist': 0.48,
             'hip': 0.54,
@@ -318,21 +318,47 @@ class MeasurementCalculator:
 
         # Calculate center X for front view (needed for shoulder and circumference measurements)
         f_center_x = (l_shoulder[0] + r_shoulder[0]) / 2
+        
+        # Calculate torso width for front view (needed for scan bounds)
+        f_torso_width_px = abs(l_shoulder[0] - r_shoulder[0])
 
         # 1. Shoulder Width (use segmentation mask for outer shoulder edges, not just skeleton)
         # Previously used skeletal distance which is too narrow for clothing fit
         # Now use the actual body width at shoulder level for accurate shirt sizing
+        # 1. Shoulder Width (use segmentation mask for outer shoulder edges, not just skeleton)
         shoulder_y = (l_shoulder[1] + r_shoulder[1]) / 2
-        shoulder_width_px = self._get_body_dimension_at_y(
-            f_mask,
-            int(shoulder_y),
-            f_w,
-            center_x=f_center_x
-        )
         
-        # Apply correction: arms are usually slightly away from torso (~8% splay)
-        # We want shoulder seam width, not full arm span
-        shoulder_width_cm = self.pixels_to_cm(shoulder_width_px * 0.92, calibration_factor)
+        # Calculate torso stats early for scanning usage
+        hip_y = (l_hip[1] + r_hip[1]) / 2
+        torso_height = hip_y - shoulder_y
+        
+        # SCAN: Search for widest point in upper arm/deltoid region
+        # Acromion is bone tip, but deltoids stick out lower.
+        # Scan from shoulder level down to 15% of torso height
+        scan_range_sh = int(torso_height * 0.15)
+        sh_start = int(shoulder_y)
+        sh_end = int(shoulder_y + scan_range_sh)
+        
+        shoulder_widths = []
+        # Calculate reasonable bounds for shoulder search
+        # Should be around center +/- (torso width * 0.8 to 1.5)
+        sh_min_x = f_center_x - f_torso_width_px * 1.5
+        sh_max_x = f_center_x + f_torso_width_px * 1.5
+        
+        for sy in range(sh_start, sh_end + 1):
+            w = self._get_body_dimension_at_y(f_mask, sy, f_w, center_x=f_center_x, min_x=sh_min_x, max_x=sh_max_x)
+            if w > 0:
+                shoulder_widths.append(w)
+        
+        if shoulder_widths:
+            shoulder_width_px = max(shoulder_widths) # Take max width (bi-deltoid)
+        else:
+            shoulder_width_px = self._get_body_dimension_at_y(
+                f_mask, int(shoulder_y), f_w, center_x=f_center_x
+            )
+        
+        # Apply correction: We want garment/bi-deltoid width
+        shoulder_width_cm = self.pixels_to_cm(shoulder_width_px, calibration_factor)
         measurements['shoulder_width'] = shoulder_width_cm
         
         # 2. Height (use the same logic as calibration for consistency)
@@ -350,9 +376,7 @@ class MeasurementCalculator:
         measurements['height'] = self.pixels_to_cm(height_px, calibration_factor)
 
         # Define vertical levels (Y-coordinates)
-        # shoulder_y already calculated above for shoulder width
-        hip_y = (l_hip[1] + r_hip[1]) / 2
-        torso_height = hip_y - shoulder_y
+        # shoulder_y and hip_y, torso_height already calculated above
         
         # Refined Ratios (Anthropometric standards)
         if gender == 'female':
@@ -388,8 +412,10 @@ class MeasurementCalculator:
         width_correction = 0.96 # 4% ease subtraction
         depth_correction = 0.94 # 6% ease subtraction
         
-        # Calculate torso width for front view (f_center_x already calculated above)
-        f_torso_width_px = abs(l_shoulder[0] - r_shoulder[0])
+        # f_torso_width_px already calculated above
+
+        # 1. Shoulder Width (use segmentation mask for outer shoulder edges, not just skeleton)
+        shoulder_y = (l_shoulder[1] + r_shoulder[1]) / 2
 
         # Calculate center X and torso bounds for side view
         s_center_x = 0
@@ -509,8 +535,8 @@ class MeasurementCalculator:
                 continue
 
             # Calculate dynamic weight
-            # Base weight for CV
-            cv_weight = 0.7 
+            # Base weight for CV - INCREASED from 0.7 to 0.85 to trust vision more
+            cv_weight = 0.85 
             
             # More aggressive weight reduction based on overall confidence
             conf = front_landmarks['confidence']
@@ -530,9 +556,9 @@ class MeasurementCalculator:
             fused_circ = (cv_circ * cv_weight) + (ae_val * (1 - cv_weight))
             
             # AGGRESSIVE SANITY CHECK
-            # If the result is wildly different (> 35%), it's likely a failure
+            # If the result is wildly different (> 50%), it's likely a failure
             # In that case, we pull it hard toward AE
-            if abs(fused_circ - ae_val) / ae_val > 0.35:
+            if abs(fused_circ - ae_val) / ae_val > 0.50:
                 # Replace with weighted bias toward statistics
                 fused_circ = (fused_circ * 0.2) + (ae_val * 0.8)
             
@@ -574,12 +600,15 @@ class MeasurementCalculator:
         # Fuse Shoulder Width (special case since it doesn't use circumference)
         ae_shoulder = ae_measurements.get('shoulder_width', measurements['shoulder_width'])
         cv_shoulder = measurements['shoulder_width']
-        shoulder_weight = 0.8 if front_landmarks['confidence'] > 0.75 else 0.3
+        
+        # Increased confidence weight - If we have good landmarks, trust the scan result
+        shoulder_weight = 0.9 if front_landmarks['confidence'] > 0.75 else 0.4
         
         fused_shoulder = (cv_shoulder * shoulder_weight) + (ae_shoulder * (1 - shoulder_weight))
         
-        # AGGRESSIVE SANITY CHECK: Shoulders shouldn't be wider than 30% of height or narrower than 15%
-        if fused_shoulder > calibration_height_cm * 0.30 or fused_shoulder < calibration_height_cm * 0.15:
+        # AGGRESSIVE SANITY CHECK: Shoulders shouldn't be wider than 40% of height or narrower than 15%
+        # Relaxed upper bound significantly to accommodate bodybuilders/broad structures
+        if fused_shoulder > calibration_height_cm * 0.40 or fused_shoulder < calibration_height_cm * 0.15:
             fused_shoulder = ae_shoulder
             
         measurements['shoulder_width'] = fused_shoulder
