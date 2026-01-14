@@ -9,16 +9,21 @@ import { Footer } from './components/Footer';
 import { Play } from 'lucide-react';
 
 import { BookDemoModal } from './components/BookDemoModal';
+import { WatchDemoModal } from './components/WatchDemoModal';
 import { VirtualTryOnStudio } from './components/VirtualTryOnStudio';
+import { PolicyPage, PolicyType } from './components/PolicyPage';
 
 function App() {
   const [showTryOn, setShowTryOn] = useState(false);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
+  const [isWatchDemoModalOpen, setIsWatchDemoModalOpen] = useState(false);
   const [view, setView] = useState<'main' | 'studio'>('main');
+  const [policyView, setPolicyView] = useState<PolicyType | null>(null);
   const [userFrontImage, setUserFrontImage] = useState<string | null>(null);
 
   const handleHome = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
+    setPolicyView(null);
     if (view !== 'main') {
       setView('main');
     }
@@ -28,6 +33,7 @@ function App() {
 
   const handleNavigate = (id: string, e?: React.MouseEvent) => {
     if (e) e.preventDefault();
+    setPolicyView(null);
     
     const scrollToElement = () => {
       const element = document.getElementById(id);
@@ -45,6 +51,42 @@ function App() {
     }
   };
 
+  const handleShowPolicy = (type: PolicyType) => {
+    setPolicyView(type);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  if (policyView) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-gray-900">
+        <Navigation 
+          onBookDemo={() => setIsDemoModalOpen(true)} 
+          onHome={handleHome}
+          onNavigate={(id, e) => handleNavigate(id, e)}
+        />
+        <div className="pt-20">
+          <PolicyPage 
+            type={policyView} 
+            onBack={() => setPolicyView(null)} 
+          />
+        </div>
+        <Footer 
+          onShowPolicy={handleShowPolicy} 
+          onHome={handleHome}
+          onNavigate={(id, e) => handleNavigate(id, e)}
+        />
+        <BookDemoModal 
+          isOpen={isDemoModalOpen} 
+          onClose={() => setIsDemoModalOpen(false)} 
+        />
+        <WatchDemoModal 
+          isOpen={isWatchDemoModalOpen} 
+          onClose={() => setIsWatchDemoModalOpen(false)} 
+        />
+      </div>
+    );
+  }
+
   if (view === 'studio' && userFrontImage) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900">
@@ -59,10 +101,18 @@ function App() {
             onBack={() => setView('main')} 
           />
         </div>
-        <Footer />
+        <Footer 
+          onShowPolicy={handleShowPolicy} 
+          onHome={handleHome}
+          onNavigate={(id, e) => handleNavigate(id, e)}
+        />
         <BookDemoModal 
           isOpen={isDemoModalOpen} 
           onClose={() => setIsDemoModalOpen(false)} 
+        />
+        <WatchDemoModal 
+          isOpen={isWatchDemoModalOpen} 
+          onClose={() => setIsWatchDemoModalOpen(false)} 
         />
       </div>
     );
@@ -75,7 +125,10 @@ function App() {
         onHome={handleHome}
         onNavigate={(id, e) => handleNavigate(id, e)}
       />
-      <Hero onStartTryOn={() => setShowTryOn(true)} />
+      <Hero 
+        onStartTryOn={() => setShowTryOn(true)} 
+        onWatchDemo={() => setIsWatchDemoModalOpen(true)}
+      />
       <div id="try-on" className="py-16 bg-gray-50 dark:bg-gray-800/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {showTryOn ? (
@@ -116,10 +169,18 @@ function App() {
         onBookDemo={() => setIsDemoModalOpen(true)} 
         onStartTryOn={() => setShowTryOn(true)}
       />
-      <Footer />
+      <Footer 
+        onShowPolicy={handleShowPolicy} 
+        onHome={handleHome}
+        onNavigate={(id, e) => handleNavigate(id, e)}
+      />
       <BookDemoModal 
         isOpen={isDemoModalOpen} 
         onClose={() => setIsDemoModalOpen(false)} 
+      />
+      <WatchDemoModal 
+        isOpen={isWatchDemoModalOpen} 
+        onClose={() => setIsWatchDemoModalOpen(false)} 
       />
     </div>
   );

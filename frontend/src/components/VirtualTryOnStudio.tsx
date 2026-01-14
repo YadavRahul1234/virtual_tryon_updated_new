@@ -208,7 +208,7 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
                     <RefreshCw className="w-16 h-16 text-violet-600 animate-spin" />
                     <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-yellow-400 animate-pulse" />
                   </div>
-                  <p className="text-gray-500 dark:text-gray-400 font-medium italic">n8n is processing your magic look...</p>
+                  <p className="text-gray-500 dark:text-gray-400 font-medium italic">Processing your magic look...</p>
                 </div>
               </div>
             ) : resultImage ? (

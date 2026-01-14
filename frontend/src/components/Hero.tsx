@@ -2,9 +2,10 @@ import { ArrowRight, User } from 'lucide-react';
 
 interface HeroProps {
   onStartTryOn: () => void;
+  onWatchDemo: () => void;
 }
 
-export function Hero({ onStartTryOn }: HeroProps) {
+export function Hero({ onStartTryOn, onWatchDemo }: HeroProps) {
   const handleStart = () => {
     onStartTryOn();
     const tryOnSection = document.getElementById('try-on');
@@ -41,7 +42,10 @@ export function Hero({ onStartTryOn }: HeroProps) {
                 <span>Get Started Free</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
-              <button className="px-8 py-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white border-2 border-gray-200 dark:border-gray-700 rounded-lg font-semibold text-lg transition-all hover:shadow-lg">
+              <button 
+                onClick={onWatchDemo}
+                className="px-8 py-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white border-2 border-gray-200 dark:border-gray-700 rounded-lg font-semibold text-lg transition-all hover:shadow-lg"
+              >
                 Watch Demo
               </button>
             </div>
