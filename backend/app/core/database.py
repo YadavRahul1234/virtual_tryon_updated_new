@@ -56,3 +56,8 @@ def get_users_collection():
 def get_measurements_collection():
     """Get measurements collection."""
     return mongodb.get_collection("measurements")
+
+
+def get_tryon_collection():
+    """Get tryon collection."""
+    return mongodb.get_collection("tryon")

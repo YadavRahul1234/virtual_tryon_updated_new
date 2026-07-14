@@ -12,13 +12,17 @@ interface VirtualTryOnStudioProps {
 export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImage, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [tryOnLoading, setTryOnLoading] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(false);
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [baseAvatar, setBaseAvatar] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedClothes, setSelectedClothes] = useState<ClothItem[]>([]);
 
-  const N8N_AVATAR_WEBHOOK = 'https://n8n.intelligens.app/webhook/avatar_url';
-  const N8N_CLOTH_WEBHOOK = 'https://n8n.intelligens.app/webhook/cloth_json_data';
+  const [userId] = useState(() => 'user_' + Math.random().toString(36).substring(2, 11));
+
+  const N8N_AVATAR_WEBHOOK = import.meta.env.VITE_N8N_AVATAR_WEBHOOK;
+  const N8N_CLOTH_WEBHOOK = import.meta.env.VITE_N8N_CLOTH_WEBHOOK;
+  const N8N_VIDEO_WEBHOOK = import.meta.env.VITE_N8N_VIDEO_WEBHOOK || 'https://n8n.intelligens.app/webhook/try-on-video';
 
   const extractImageUrl = (data: any): string | null => {
     if (Array.isArray(data) && data.length > 0) {
@@ -68,6 +72,7 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
       const formData = new FormData();
       formData.append('image', blob, 'image.png');
       formData.append('outfit', selectedClothes.length > 0 ? selectedClothes[0].title : 'Casual Suit');
+      formData.append('user_id', userId);
 
       const response = await axios.post(N8N_AVATAR_WEBHOOK, formData, {
         headers: {
@@ -127,9 +132,20 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
         }
       }
 
-      // Add avatar URL and selection info as text fields
+      // Add full body original user image
+      if (userImage) {
+        try {
+          const fullBodyResponse = await fetch(userImage);
+          const fullBodyBlob = await fullBodyResponse.blob();
+          formData.append('full_body_image', fullBodyBlob, 'full_body.png');
+        } catch (e) {
+          console.error('Failed to fetch full body image as blob:', e);
+        }
+      }
+
       // Add avatar URL and selection info as text fields
       formData.append('avatar_url', resultImage || '');
+      formData.append('user_id', userId);
       
       // Send the first selected cloth image as binary 'cloth_image'
       if (selectedClothes.length > 0) {
@@ -165,6 +181,38 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
       setError(err.message || 'Failed to send cloth try-on request.');
     } finally {
       setTryOnLoading(false);
+    }
+  };
+
+  const handleGenerateVideo = async () => {
+    if (!resultImage) {
+      setError('No try-on avatar available to generate video.');
+      return;
+    }
+    setVideoLoading(true);
+    setError(null);
+    try {
+      const payload = {
+        user_id: userId,
+        tryon_avatar_url: resultImage
+      };
+      
+      const response = await axios.post(N8N_VIDEO_WEBHOOK, payload, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (response.data) {
+        alert('Video generation request sent successfully!');
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (err.response?.status === 500) {
+        setError('Error 500: N8N workflow failed to process the request. Check N8N logs.');
+      } else {
+        setError(err.message || 'Failed to generate video request.');
+      }
+    } finally {
+      setVideoLoading(false);
     }
   };
 
@@ -298,10 +346,19 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
                 <button
                   onClick={handleClothTryOn}
                   disabled={tryOnLoading || selectedClothes.length === 0}
-                  className="w-full py-4 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-violet-500/20"
+                  className="w-full py-4 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-violet-500/20 mb-4"
                 >
                   {tryOnLoading ? <RefreshCw className="animate-spin w-5 h-5" /> : <Sparkle className="w-5 h-5 text-yellow-300" />}
                   {tryOnLoading ? 'Processing Try-On...' : 'Confirm Cloth Try-On'}
+                </button>
+
+                <button
+                  onClick={handleGenerateVideo}
+                  disabled={videoLoading || !resultImage}
+                  className="w-full py-4 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-pink-500/20"
+                >
+                  {videoLoading ? <RefreshCw className="animate-spin w-5 h-5" /> : <Sparkle className="w-5 h-5" />}
+                  {videoLoading ? 'Generating Video...' : 'Generate Try-On Video'}
                 </button>
               </div>
             </div>

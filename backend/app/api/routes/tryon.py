@@ -5,6 +5,7 @@ from app.services.clothing_overlay import clothing_overlay
 from app.services.avatar_generator import avatar_generator
 import os
 import base64
+from app.core.database import get_tryon_collection
 
 router = APIRouter()
 
@@ -136,3 +137,34 @@ async def list_available_garments():
         "garments": garments,
         "total_count": len(garments)
     }
+
+@router.get("/result/{user_id}")
+async def get_tryon_result(user_id: str):
+    """
+    Get the try-on result for a specific user from the tryon collection in MongoDB.
+    """
+    try:
+        collection = get_tryon_collection()
+        # Find the most recent document for this user_id
+        cursor = collection.find({"user_id": user_id}).sort("_id", -1)
+        
+        result = None
+        async for doc in cursor:
+            result = doc
+            break
+            
+        if not result:
+            raise HTTPException(status_code=404, detail="Try-on result not found for this user")
+            
+        # Convert ObjectId to string
+        if "_id" in result:
+            result["_id"] = str(result["_id"])
+            
+        return {
+            "success": True,
+            "data": result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch try-on result: {str(e)}")
