@@ -17,6 +17,7 @@ export const TryOn: React.FC<TryOnProps> = ({ onGenerateAvatar }) => {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<MeasurementResponse | null>(null);
   const [showRecommendations, setShowRecommendations] = useState(false);
+  const [activeTab, setActiveTab] = useState<'analysis' | 'tryon'>('analysis');
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'front' | 'side') => {
     const file = e.target.files?.[0];
@@ -67,12 +68,37 @@ export const TryOn: React.FC<TryOnProps> = ({ onGenerateAvatar }) => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-12">
-      <div className="text-center mb-12">
+      <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Virtual Try-On & Body Analysis</h2>
-        <p className="text-gray-600 dark:text-gray-400">Upload your photos to get started with AI-powered measurements.</p>
+        <p className="text-gray-600 dark:text-gray-400">Upload your photos to get started with AI-powered measurements or try on directly.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+      <div className="flex justify-center mb-12">
+        <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl inline-flex shadow-inner">
+          <button
+            onClick={() => setActiveTab('analysis')}
+            className={`px-8 py-3 rounded-xl font-bold text-sm transition-all ${
+              activeTab === 'analysis'
+                ? 'bg-white dark:bg-gray-700 text-violet-600 dark:text-violet-400 shadow-md'
+                : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            Body Analysis
+          </button>
+          <button
+            onClick={() => setActiveTab('tryon')}
+            className={`px-8 py-3 rounded-xl font-bold text-sm transition-all ${
+              activeTab === 'tryon'
+                ? 'bg-white dark:bg-gray-700 text-violet-600 dark:text-violet-400 shadow-md'
+                : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            Virtual Try-On
+          </button>
+        </div>
+      </div>
+
+      <div className={`grid grid-cols-1 ${activeTab === 'analysis' ? 'md:grid-cols-2' : 'max-w-xl mx-auto'} gap-8 mb-8`}>
         <div className="p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
           <label className="block text-sm font-semibold mb-2 dark:text-gray-200">Front View (Required)</label>
           <div className="relative group cursor-pointer border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl overflow-hidden aspect-[3/4] flex items-center justify-center">
@@ -88,69 +114,84 @@ export const TryOn: React.FC<TryOnProps> = ({ onGenerateAvatar }) => {
           </div>
         </div>
 
-        <div className="p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
-          <label className="block text-sm font-semibold mb-2 dark:text-gray-200">Side View (Optional)</label>
-          <div className="relative group cursor-pointer border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl overflow-hidden aspect-[3/4] flex items-center justify-center">
-            {sideImage ? (
-              <img src={sideImage} className="w-full h-full object-cover" alt="Side Preview" />
-            ) : (
-              <div className="text-center p-6">
-                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Click to upload side view</p>
-              </div>
-            )}
-            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileChange(e, 'side')} />
+        {activeTab === 'analysis' && (
+          <div className="p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
+            <label className="block text-sm font-semibold mb-2 dark:text-gray-200">Side View (Optional)</label>
+            <div className="relative group cursor-pointer border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl overflow-hidden aspect-[3/4] flex items-center justify-center">
+              {sideImage ? (
+                <img src={sideImage} className="w-full h-full object-cover" alt="Side Preview" />
+              ) : (
+                <div className="text-center p-6">
+                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">Click to upload side view</p>
+                </div>
+              )}
+              <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileChange(e, 'side')} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="max-w-xl mx-auto space-y-6 mb-12">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold mb-2 dark:text-gray-200">Gender</label>
-            <select 
-              value={gender} 
-              onChange={(e) => setGender(e.target.value as any)}
-              className="w-full px-4 py-2 rounded-lg border dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-            >
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold mb-2 dark:text-gray-200">Height</label>
-            <div className="flex">
-              <input 
-                type="number" 
-                value={height} 
-                onChange={(e) => {
-                  const val = e.target.value;
-                  // Remove leading zeros
-                  setHeight(val === '' ? '' : String(Number(val)));
-                }}
-                className="w-full px-4 py-2 rounded-l-lg border dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                placeholder="0"
-              />
+        {activeTab === 'analysis' && (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold mb-2 dark:text-gray-200">Gender</label>
               <select 
-                value={units} 
-                onChange={(e) => setUnits(e.target.value as any)}
-                className="px-2 py-2 rounded-r-lg border-l-0 border dark:bg-gray-600 dark:border-gray-600 dark:text-white"
+                value={gender} 
+                onChange={(e) => setGender(e.target.value as any)}
+                className="w-full px-4 py-2 rounded-lg border dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
-                <option value="metric">cm</option>
-                <option value="imperial">in</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-semibold mb-2 dark:text-gray-200">Height</label>
+              <div className="flex">
+                <input 
+                  type="number" 
+                  value={height} 
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    // Remove leading zeros
+                    setHeight(val === '' ? '' : String(Number(val)));
+                  }}
+                  className="w-full px-4 py-2 rounded-l-lg border dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  placeholder="0"
+                />
+                <select 
+                  value={units} 
+                  onChange={(e) => setUnits(e.target.value as any)}
+                  className="px-2 py-2 rounded-r-lg border-l-0 border dark:bg-gray-600 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="metric">cm</option>
+                  <option value="imperial">in</option>
+                </select>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
-        <button 
-          onClick={calculateMeasurements}
-          disabled={loading || !frontImage}
-          className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center space-x-2 transition-all"
-        >
-          {loading ? <RefreshCw className="animate-spin" /> : <Ruler />}
-          <span>{loading ? 'Processing...' : 'Calculate Measurements'}</span>
-        </button>
+        {activeTab === 'analysis' ? (
+          <button 
+            onClick={calculateMeasurements}
+            disabled={loading || !frontImage}
+            className="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center space-x-2 transition-all"
+          >
+            {loading ? <RefreshCw className="animate-spin" /> : <Ruler />}
+            <span>{loading ? 'Processing...' : 'Calculate Measurements'}</span>
+          </button>
+        ) : (
+          <button 
+            onClick={() => onGenerateAvatar(frontImage!)}
+            disabled={loading || !frontImage}
+            className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 disabled:opacity-50 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center space-x-2 transition-all"
+          >
+            <Sparkles className="w-5 h-5" />
+            <span>Start Virtual Try-On</span>
+          </button>
+        )}
 
         {error && (
           <div className="p-4 bg-red-50 text-red-600 rounded-lg flex items-center space-x-2 border border-red-200">

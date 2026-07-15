@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, RefreshCw, Download, Sparkles, Wand2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Download, Sparkles, Wand2, AlertCircle, User, Shirt, Video } from 'lucide-react';
 import axios from 'axios';
 import { ClothCatalog, ClothItem } from './ClothCatalog';
 import { Trash2, ShoppingCart, Sparkle } from 'lucide-react';
@@ -13,8 +13,9 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
   const [loading, setLoading] = useState(false);
   const [tryOnLoading, setTryOnLoading] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
-  const [resultImage, setResultImage] = useState<string | null>(null);
-  const [baseAvatar, setBaseAvatar] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [avatarImage, setAvatarImage] = useState<string | null>(null);
+  const [tryOnImage, setTryOnImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedClothes, setSelectedClothes] = useState<ClothItem[]>([]);
 
@@ -31,7 +32,7 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
     if (typeof data === 'string' && data.trim().startsWith('{')) {
       try {
         data = JSON.parse(data);
-      } catch (e) {}
+      } catch (e) { }
     }
 
     let result = null;
@@ -39,9 +40,9 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
       result = data;
     } else if (typeof data === 'object' && data !== null) {
       const keys = Object.keys(data);
-      const urlKey = keys.find(k => 
+      const urlKey = keys.find(k =>
         ['avatar_url', 'output_image', 'image_url', 'url', 'output', 'result'].includes(k.toLowerCase()) ||
-        k.toLowerCase().includes('url') || 
+        k.toLowerCase().includes('url') ||
         k.toLowerCase().includes('avatar')
       );
       if (urlKey) {
@@ -50,7 +51,7 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
         result = Object.values(data).find(v => typeof v === 'string' && (v.startsWith('http') || v.startsWith('data:')));
       }
     }
-    
+
     if (result && typeof result === 'string' && (result.startsWith('http') || result.startsWith('data:'))) {
       return result.trim().replace(/^["']|["']$/g, '');
     }
@@ -83,8 +84,7 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
       if (response.data) {
         const imageUrl = extractImageUrl(response.data);
         if (imageUrl) {
-          setResultImage(imageUrl);
-          setBaseAvatar(imageUrl);
+          setAvatarImage(imageUrl);
         } else {
           setError(`Webhook response did not contain a valid image link.`);
         }
@@ -119,11 +119,11 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
     setError(null);
     try {
       const formData = new FormData();
-      
+
       // Send the ORIGINAL 2D avatar as the binary 'image'
-      if (baseAvatar) {
+      if (avatarImage) {
         try {
-          const avatarResponse = await fetch(baseAvatar);
+          const avatarResponse = await fetch(avatarImage);
           const avatarBlob = await avatarResponse.blob();
           formData.append('image', avatarBlob, 'avatar.png');
         } catch (e) {
@@ -144,9 +144,9 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
       }
 
       // Add avatar URL and selection info as text fields
-      formData.append('avatar_url', resultImage || '');
+      formData.append('avatar_url', avatarImage || '');
       formData.append('user_id', userId);
-      
+
       // Send the first selected cloth image as binary 'cloth_image'
       if (selectedClothes.length > 0) {
         try {
@@ -170,7 +170,7 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
       if (response.data) {
         const imageUrl = extractImageUrl(response.data);
         if (imageUrl) {
-          setResultImage(imageUrl);
+          setTryOnImage(imageUrl);
           alert('Cloth Try-On updated successfully!');
         } else {
           console.log('Cloth Try-On response:', response.data);
@@ -184,25 +184,56 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
     }
   };
 
+  const pollVideoStatus = async () => {
+    let attempts = 0;
+    const maxAttempts = 30; // Wait up to 5 minutes
+    const interval = setInterval(async () => {
+      try {
+        const response = await axios.get(`http://localhost:8000/api/tryon/result/${userId}`);
+        if (response.data?.success && response.data?.data) {
+          const dbData = response.data.data;
+          const url = dbData.video_url || dbData.videoUrl || dbData.video || dbData.result_video;
+          if (url) {
+            setVideoUrl(url);
+            setVideoLoading(false);
+            clearInterval(interval);
+          }
+        }
+      } catch (e) {
+        // ignore errors during polling like 404
+      }
+
+      attempts++;
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        setVideoLoading(false);
+        setError("Video generation timed out. Please check back later.");
+      }
+    }, 10000); // 10 seconds interval
+  };
+
   const handleGenerateVideo = async () => {
-    if (!resultImage) {
+    if (!tryOnImage) {
       setError('No try-on avatar available to generate video.');
       return;
     }
     setVideoLoading(true);
     setError(null);
+    setVideoUrl(null);
     try {
       const payload = {
         user_id: userId,
-        tryon_avatar_url: resultImage
+        tryon_avatar_url: tryOnImage
       };
-      
+
       const response = await axios.post(N8N_VIDEO_WEBHOOK, payload, {
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       if (response.data) {
-        alert('Video generation request sent successfully!');
+        pollVideoStatus(); // start polling instead of stopping loader
+      } else {
+        setVideoLoading(false);
       }
     } catch (err: any) {
       console.error(err);
@@ -211,14 +242,13 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
       } else {
         setError(err.message || 'Failed to generate video request.');
       }
-    } finally {
       setVideoLoading(false);
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 animate-in fade-in duration-500">
-      <button 
+      <button
         onClick={onBack}
         className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors mb-8"
       >
@@ -231,153 +261,179 @@ export const VirtualTryOnStudio: React.FC<VirtualTryOnStudioProps> = ({ userImag
         <p className="text-gray-600 dark:text-gray-400">Experience the future of fashion with AI-powered clothing simulation.</p>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-12 items-start mb-12">
-        {/* Left: Original Photo */}
-        <div className="space-y-6">
-          <div className="relative group">
-             <div className="absolute -inset-1 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-3xl blur opacity-25 group-hover:opacity-40 transition duration-1000"></div>
-             <div className="relative bg-white dark:bg-gray-800 rounded-3xl p-2 border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden aspect-[3/4]">
-               <img src={userImage} className="w-full h-full object-cover rounded-2xl" alt="Your Photo" />
-               <div className="absolute top-4 left-4 px-4 py-2 bg-black/50 backdrop-blur-md rounded-full text-white text-xs font-bold flex items-center gap-2">
-                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                 Input Photo
-               </div>
-             </div>
+      <div className="flex flex-row overflow-x-auto items-start justify-start max-w-full space-x-8 pb-8 mb-12 min-h-[400px]">
+        {/* Step 1: Original Photo */}
+        <div className="flex-shrink-0 w-72 flex flex-col items-center gap-4">
+          <div className="w-full text-center">
+            <h3 className="font-bold text-gray-800 dark:text-gray-200 text-lg">Step 1: Original Image</h3>
+          </div>
+          <div className="w-full relative bg-white dark:bg-gray-800 rounded-3xl p-2 border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden aspect-[3/4]">
+            <img src={userImage} className="w-full h-full object-cover rounded-2xl" alt="Your Photo" />
           </div>
         </div>
 
-        {/* Right: n8n Output */}
-        <div className="space-y-6">
-          <div className="relative group flex items-center justify-center">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-3xl bg-gray-50/50 dark:bg-gray-800/30 w-full aspect-[3/4] animate-pulse">
-                <div className="flex flex-col items-center gap-4 animate-in zoom-in-95">
-                  <div className="relative">
-                    <RefreshCw className="w-16 h-16 text-violet-600 animate-spin" />
-                    <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-yellow-400 animate-pulse" />
-                  </div>
-                  <p className="text-gray-500 dark:text-gray-400 font-medium italic">Processing your magic look...</p>
-                </div>
-              </div>
-            ) : resultImage ? (
-              <div className="w-full p-2 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-2xl overflow-hidden aspect-[3/4] animate-in slide-in-from-right-10 duration-700 relative">
-                <img src={resultImage} className="w-full h-full object-cover rounded-2xl" alt="AI Generated Result" />
+        {/* Error Display */}
+        {error && (
+          <div className="flex-shrink-0 w-72 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl border border-red-100 dark:border-red-800/20 flex flex-col items-center text-center gap-3 animate-in fade-in">
+            <AlertCircle className="w-8 h-8 flex-shrink-0" />
+            <p className="text-sm font-medium">{error}</p>
+          </div>
+        )}
+
+        {/* Step 2: 2D Avatar */}
+        <div className="flex-shrink-0 w-72 flex flex-col items-center gap-4 animate-in slide-in-from-left-4 duration-700">
+          <div className="w-full text-center">
+            <h3 className="font-bold text-gray-800 dark:text-gray-200 text-lg">Step 2: 2D Avatar</h3>
+          </div>
+          
+          {avatarImage ? (
+            <div className="w-full relative bg-white dark:bg-gray-800 rounded-3xl p-2 border border-gray-100 dark:border-gray-700 shadow-2xl overflow-hidden aspect-[3/4]">
+              <img src={avatarImage} className="w-full h-full object-cover rounded-2xl" alt="2D Avatar Result" />
+            </div>
+          ) : (
+            <div className="w-full flex flex-col justify-center items-center bg-gray-50 dark:bg-gray-800/50 rounded-3xl p-4 border border-dashed border-gray-300 dark:border-gray-700 aspect-[3/4] text-gray-400">
+              <User className="w-12 h-12 mb-2 opacity-50" />
+              <span className="text-sm">Avatar Placeholder</span>
+            </div>
+          )}
+
+          {!avatarImage && (
+            <button
+              onClick={handleSimulate}
+              disabled={loading}
+              className="w-full py-5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-3xl font-black text-lg shadow-2xl shadow-violet-500/40 transform hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {loading ? <RefreshCw className="animate-spin w-5 h-5" /> : <Wand2 className="w-5 h-5" />}
+              {loading ? 'Processing...' : 'Generate 2D Avatar'}
+            </button>
+          )}
+        </div>
+
+        {/* Step 3: Try-On Image */}
+        {avatarImage && (
+          <div className="flex-shrink-0 w-72 flex flex-col items-center gap-4 animate-in slide-in-from-left-4 duration-700">
+            <div className="w-full text-center">
+              <h3 className="font-bold text-gray-800 dark:text-gray-200 text-lg">Step 3: Try-On Image</h3>
+            </div>
+            
+            {tryOnImage ? (
+              <div className="w-full relative bg-white dark:bg-gray-800 rounded-3xl p-2 border border-gray-100 dark:border-gray-700 shadow-2xl overflow-hidden aspect-[3/4]">
+                <img src={tryOnImage} className="w-full h-full object-cover rounded-2xl" alt="Try-On Result" />
                 <div className="absolute top-4 right-4 flex gap-2">
-                  <a 
-                    href={resultImage} 
-                    download="generated-look.png"
-                    className="p-3 bg-white/90 hover:bg-white text-gray-900 rounded-full shadow-lg transition-transform hover:scale-110"
+                  <a
+                    href={tryOnImage}
+                    download="tryon-look.png"
+                    className="p-2 bg-white/90 hover:bg-white text-gray-900 rounded-full shadow-lg transition-transform hover:scale-110"
                     title="Download Result"
                   >
-                    <Download className="w-5 h-5" />
+                    <Download className="w-4 h-4" />
                   </a>
-                </div>
-                <div className="absolute top-4 left-4 px-4 py-2 bg-violet-600 rounded-full text-white text-xs font-bold flex items-center gap-2 shadow-lg">
-                   <Wand2 className="w-3 h-3" />
-                   AI Output
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-3xl bg-gray-50/50 dark:bg-gray-800/30 w-full aspect-[3/4]">
-                <Wand2 className="w-16 h-16 text-gray-300 mb-4" />
-                <h4 className="text-xl font-bold text-gray-500 dark:text-gray-400 mb-2">Ready to see the result?</h4>
-                <p className="text-sm text-gray-400 max-w-xs">Click the button below to start the virtual try-on simulation powered by n8n.</p>
+              <div className="w-full flex flex-col justify-center items-center bg-gray-50 dark:bg-gray-800/50 rounded-3xl p-4 border border-dashed border-gray-300 dark:border-gray-700 aspect-[3/4] text-gray-400">
+                <Shirt className="w-12 h-12 mb-2 opacity-50" />
+                <span className="text-sm">Try-On Placeholder</span>
               </div>
             )}
-          </div>
 
-          <button
-            onClick={handleSimulate}
-            disabled={loading}
-            className="w-full py-5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-3xl font-black text-xl shadow-2xl shadow-violet-500/40 transform hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-          >
-            {loading ? <RefreshCw className="animate-spin w-6 h-6" /> : <Wand2 className="w-6 h-6" />}
-            {loading ? 'Processing...' : 'Start Try-On Magic'}
-          </button>
+            {!tryOnImage && (
+              <>
+                {/* Cloth Selection */}
+                <div className="w-full bg-white dark:bg-gray-800 rounded-3xl p-4 border border-violet-100 dark:border-violet-900/30 shadow-xl shadow-violet-500/5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
+                      <ShoppingCart className="w-4 h-4 text-violet-600" />
+                      Selected
+                    </h4>
+                    {selectedClothes.length > 0 && (
+                      <button
+                        onClick={() => setSelectedClothes([])}
+                        className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
 
-          {resultImage && (
-            <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-violet-100 dark:border-violet-900/30 shadow-xl shadow-violet-500/5">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <ShoppingCart className="w-5 h-5 text-violet-600" />
-                    Selected Clothes
-                    <span className="bg-violet-100 dark:bg-violet-900/40 text-violet-600 px-2 py-0.5 rounded-full text-xs">
-                      {selectedClothes.length}
-                    </span>
-                  </h4>
-                  {selectedClothes.length > 0 && (
-                    <button 
-                      onClick={() => setSelectedClothes([])}
-                      className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                  {selectedClothes.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedClothes.map(item => (
+                        <div key={item.id} className="relative group">
+                          <img
+                            src={item.image}
+                            alt={item.title}
+                            className="w-12 h-16 object-cover rounded-xl border-2 border-violet-100 dark:border-violet-900/30"
+                          />
+                          <button
+                            onClick={() => handleToggleCloth(item)}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => document.getElementById('cloth-catalog')?.scrollIntoView({ behavior: 'smooth' })}
+                      className="w-full py-3 border-2 border-dashed border-violet-200 dark:border-violet-800/50 rounded-xl text-center text-xs text-violet-500 font-medium hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:border-violet-300 transition-colors"
                     >
-                      Clear Selection
+                      Browse Clothes Catalog
                     </button>
                   )}
                 </div>
 
-                {selectedClothes.length > 0 ? (
-                  <div className="flex flex-wrap gap-3 mb-6">
-                    {selectedClothes.map(item => (
-                      <div key={item.id} className="relative group">
-                        <img 
-                          src={item.image} 
-                          alt={item.title} 
-                          className="w-16 h-20 object-cover rounded-xl border-2 border-violet-100 dark:border-violet-900/30" 
-                        />
-                        <button 
-                          onClick={() => handleToggleCloth(item)}
-                          className="absolute -top-1 -right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                        <div className="absolute inset-x-0 bottom-0 bg-black/40 text-[8px] text-white p-1 text-center rounded-b-xl truncate">
-                          {item.title}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-sm text-gray-400 italic">
-                    Select clothes from the catalog below
-                  </div>
-                )}
-
                 <button
                   onClick={handleClothTryOn}
                   disabled={tryOnLoading || selectedClothes.length === 0}
-                  className="w-full py-4 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-violet-500/20 mb-4"
+                  className="w-full py-5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-3xl font-black text-lg shadow-2xl shadow-violet-500/40 transform hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {tryOnLoading ? <RefreshCw className="animate-spin w-5 h-5" /> : <Sparkle className="w-5 h-5 text-yellow-300" />}
-                  {tryOnLoading ? 'Processing Try-On...' : 'Confirm Cloth Try-On'}
+                  {tryOnLoading ? <RefreshCw className="animate-spin w-5 h-5" /> : <Sparkle className="w-5 h-5" />}
+                  {tryOnLoading ? 'Processing...' : 'Try On'}
                 </button>
+              </>
+            )}
+          </div>
+        )}
 
-                <button
-                  onClick={handleGenerateVideo}
-                  disabled={videoLoading || !resultImage}
-                  className="w-full py-4 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-pink-500/20"
-                >
-                  {videoLoading ? <RefreshCw className="animate-spin w-5 h-5" /> : <Sparkle className="w-5 h-5" />}
-                  {videoLoading ? 'Generating Video...' : 'Generate Try-On Video'}
-                </button>
+        {/* Step 4: Generated Video Display */}
+        {tryOnImage && (
+          <div className="flex-shrink-0 w-72 flex flex-col items-center gap-4 animate-in slide-in-from-left-4">
+            <div className="w-full text-center">
+              <h3 className="font-bold text-gray-800 dark:text-gray-200 text-lg">Step 4: Try-On Video</h3>
+            </div>
+            
+            {videoUrl ? (
+              <div className="w-full rounded-3xl overflow-hidden border-4 border-pink-500 shadow-2xl relative bg-black">
+                <video src={videoUrl} controls autoPlay loop className="w-full h-auto object-cover aspect-[3/4]" />
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="w-full flex flex-col justify-center items-center bg-gray-50 dark:bg-gray-800/50 rounded-3xl p-4 border border-dashed border-gray-300 dark:border-gray-700 aspect-[3/4] text-gray-400">
+                <Video className="w-12 h-12 mb-2 opacity-50" />
+                <span className="text-sm">Video Placeholder</span>
+              </div>
+            )}
 
-          {error && (
-            <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl border border-red-100 dark:border-red-800/20 flex items-center gap-3 animate-in fade-in">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <p className="text-sm font-medium">{error}</p>
-            </div>
-          )}
-        </div>
+            {!videoUrl && (
+              <button
+                onClick={handleGenerateVideo}
+                disabled={videoLoading || !tryOnImage}
+                className="w-full py-5 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-3xl font-black text-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-2xl shadow-pink-500/40"
+              >
+                {videoLoading ? <RefreshCw className="animate-spin w-5 h-5" /> : <Sparkle className="w-5 h-5" />}
+                {videoLoading ? 'Generating Video...' : 'Generate Try-On Video'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Full Width Catalog below */}
-      <div className="w-full">
-        <ClothCatalog 
-          onToggleSelect={handleToggleCloth} 
-          selectedItems={selectedClothes} 
+      <div className="w-full" id="cloth-catalog">
+        <ClothCatalog
+          onToggleSelect={handleToggleCloth}
+          selectedItems={selectedClothes}
         />
       </div>
     </div>
